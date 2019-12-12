@@ -2,7 +2,7 @@
 title: "Data Viewer"
 output: 
   flexdashboard::flex_dashboard:
-    orientation: columns
+    orientation: rows
     vertical_layout: fill
 runtime: shiny
 ---
@@ -25,44 +25,85 @@ pal <- colorFactor(palette = c("#1F77B4", "#AEC7E8", "#FF7F0E", "#FFBB78",
                                "#BCBD22", "#DBDB8D", "#17BECF", "#9EDAE5"), 
                    domain = NULL)
 
+stations <- NULL
+selected <- NULL
 add_watersheds <- FALSE
 add_stations <- FALSE
 
+options(shiny.maxRequestSize = 30*1024^2)
 ```
 
-Inputs {.sidebar data-width=300}
+Column {.sidebar data-width=425}
 -----------------------------------------------------------------------
 
 ### Instructions
 
 Select a station from the map on the left to retrieve monitoring data. You can use the bottom selector to plot particular constituents from that station.
 
+#### Load Files
+
 ```{r}
-selectInput("Pollutant", label = h4("Pollutant"), 
-    choices = list("-" = "-"),
-    selected = "-")
+fileInput("file1", "Load a Formatted Stations CSV File",
+          accept = c("text/csv",
+                     "text/comma-separated-values,text/plain",
+                     ".csv")
+          )
+fileInput("file2", "Load a Formatted Monitoring Data CSV File",
+          accept = c("text/csv",
+                     "text/comma-separated-values,text/plain",
+                     ".csv")
+          )
 ```
 
 
 #### Plot
 
 ```{r}
-shiny::renderPlot({
+
+selectInput(inputId = 'Constituent', label = "Choose Constituent", 
+            choices = NULL)
+
+selectInput(inputId = 'WeatherCondition', label = "Choose WeatherCondition", 
+            choices = NULL)
+
+selectInput(inputId = 'UnitName', label = "Unit Reported", 
+            choices = NULL)
+
+
+output$myplot <- shiny::renderPlot({
   ggplot2::ggplot()
 })
+
+plotOutput("myplot")
 
 ```
 
 
 
-Column {.tabset data-width=650}
+Row {data-height=550}
 -----------------------------------------------------------------------
 
 ### Map
 
 ```{r}
 
-leaflet::renderLeaflet({
+### Process station csv file
+stations <- reactive({
+  req(input$file1)
+  read.csv(input$file1$datapath)
+})
+
+### Process monitoring data csv file
+data <- reactive({
+  req(input$file2)
+  df <- read.csv(input$file2$datapath)
+  df$SampleDate <- as.Date(df$SampleDate)
+
+  df
+})
+
+
+output$mymap <- leaflet::renderLeaflet({
   
   ### Initialize Map
   m <- leaflet::leaflet() %>%
@@ -79,25 +120,89 @@ leaflet::renderLeaflet({
   }
 
   ### Add Station Markers
-  if (add_stations) {
+  if (is.null(stations())) {
+    return(NULL)
+  } else {
     m <- m %>%
-      leaflet::addMarkers(data=stations, icon = station_icon,
-                      popup = ~paste("<b>Station Code</b>:", stations$StationCode, "<br>",
+      leaflet::addMarkers(data=stations(), layerId = ~StationCode,
+                      popup = ~paste("<b>Station Code</b>:", stations()$StationCode, "<br>",
                                      "<b>Alternate Station Names</b>: - <br>",
-                               "<b>Waterbody</b>:", stations$Waterbody, "<br>",
-                               "<b>Watershed</b>: ", stations$Watershed, "<br>",
-                               "<b>Description:</b>", stations$Description, "<br>"))
+                               "<b>Waterbody</b>:", stations()$Waterbody, "<br>",
+                               "<b>Watershed</b>: ", stations()$Watershed, "<br>",
+                               "<b>Description:</b>", stations()$Description, "<br>"))
   }
   m
 })
 
+leafletOutput('mymap')
+
+
+observeEvent(input$mymap_marker_click, {
+    click <- input$mymap_marker_click
+    
+    selected <- data() %>%
+      dplyr::filter(StationCode == click$id)
+    
+    if (is.null(input$Constituent)) {
+      selected <- selected %>%
+        dplyr::filter(AnalyteName == input$Constituent)
+    }
+    
+    updateSelectInput(session, "Constituent",
+                        choices = unique(selected$AnalyteName) %>% sort(),
+                        selected = NULL)
+    
+    updateSelectInput(session, "WeatherCondition",
+                        choices = unique(selected$WeatherCondition) %>% sort(),
+                        selected = NULL)
+    
+    updateSelectInput(session, "UnitName",
+                    choices = unique(selected$UnitName) %>% sort(),
+                    selected = NULL)
+    
+    ### Updated Data Table
+    output$mytable <- DT::renderDataTable({
+      
+      DT::datatable(selected, extensions = 'Scroller', 
+                    options = list(pageLength = 10, scrollX = 100, scrollY = 200, scroller = TRUE), rownames = FALSE) %>%
+        DT::formatStyle(columns = colnames(.), fontSize = "50%")
+    })
+    
+    
+    ### Updated Plot
+    output$myplot <- shiny::renderPlot({
+      selected <- selected %>%
+        dplyr::filter(AnalyteName == input$Constituent) %>%
+        dplyr::filter(WeatherCondition == input$WeatherCondition) %>%
+        dplyr::filter(UnitName == input$UnitName)
+      
+      ggplot2::ggplot(selected, aes(SampleDate, Result)) +
+        geom_point()
+    })
+})
+
+data_for_chart <- reactive({
+
+  return(data()[data()$ids == click_marker(), ])
+
+})
+
+
 ```
+
+
+Row {data-height=450}
+-----------------------------------------------------------------------
 
 ### Monitoring Data
 
 ```{r}
-DT::renderDataTable({
-  DT::datatable()
-})
+output$mytable <- DT::renderDataTable({
+      DT::datatable(data(), extensions = 'Scroller',
+                    options = list(pageLength = 10, scrollX = 200, scrollY = 200, scroller = TRUE), rownames = FALSE) %>%
+        DT::formatStyle(columns = colnames(.), fontSize = "50%")
+    })
+
+DTOutput("mytable")
 
 ```

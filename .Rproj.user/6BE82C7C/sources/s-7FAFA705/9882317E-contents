@@ -1,0 +1,231 @@
+---
+title: "IGP Level 1 and 2 Facilities"
+author: "Chris Lopez"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: menu
+    source_code: embed
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+library(leaflet)
+library(shiny)
+library(plyr)
+library(dplyr)
+library(readxl)
+library(DT)
+library(shinydashboard)
+library(ggplot2)
+library(plotly)
+
+# Load polygons of watershed management areas
+wma <- geojsonio::geojson_read("json/wma.json", what = "sp")
+
+# Create a color palette for watershed polygons
+pal <- colorFactor(c("#1F77B4", "#AEC7E8", "#FF7F0E", "#FFBB78", 
+                     "#2CA02C", "#98DF8A", "#D62728", "#FF9896", 
+                     "#9467BD", "#C5B0D5", "#8C564B", "#C49C94", 
+                     "#E377C2", "#F7B6D2", "#7F7F7F", "#C7C7C7", 
+                     "#BCBD22", "#DBDB8D", "#17BECF", "#9EDAE5"), 
+                   NULL)
+
+# Load csv of IGP facility data
+sites <- readRDS("data/facility-data-2019-12-04.RDS")
+  
+# read_excel("data/smarts_data_2019-12-04.xls", col_types = "text") %>% as.data.frame()
+
+
+sites$Latitude <- as.numeric(sites$FACILITY_LATITUDE)
+sites$Longitude <- as.numeric(sites$FACILITY_LONGITUDE)
+#names(sites) <- make.names(names(sites))
+#sites$Level <- factor(sites$Level)
+```
+
+Inputs {.sidebar data-width=300}
+-----------------------------------------------------------------------
+
+```{r}
+ shiny::selectInput("Facilities", label = h4("Facilities"), 
+    choices = list("All Active Permitted Facilities", "All Facilities at Level 1 or 2 for a Pollutant",
+                   "All Facilities at Level 2 for a Pollutant"), 
+    selected = "All Active Permitted Facilities")
+```
+
+```{r}
+ shiny::selectInput("Pollutant", label = h4("Pollutant"), 
+    choices = list("All Pollutants" = "All Pollutants",
+                   "Aluminum, Total (Recoverable)" = "Aluminum, Total",
+                   "Ammonia, Total (as N)" = "Ammonia, Total",             
+                   "Biochemical Oxygen Demand (BOD) (5-day @ 20 Deg. C)" = 
+                     "Biochemical Oxygen Demand",
+                   "Cadmium, Total (Recoverable)" = "Cadmium, Total",
+                   "Chemical Oxygen Demand (COD)" = "Chemical Oxygen Demand",
+                   "Copper, Total (Recoverable)" = "Copper, Total",
+                   "Cyanide, Total (as CN)" = "Cyanide, Total",                     
+                   "Iron, Total (Recoverable)" = "Iron, Total",
+                   "Lead, Total (Recoverable)" = "Lead, Total",           
+                   "Magnesium, Total (Recoverable)" = "Magnesium, Total", 
+                   "Nitrite Plus Nitrate (as N)" = "Nitrite Plus Nitrate", 
+                   "Oil and Grease" = "Oil and Grease", 
+                   "pH" = "pH",
+                   "Phosphorus, Total (as P)" = "Phosphorus, Total", 
+                   "Selenium, Total (Recoverable)" = "Selenium, Total",       
+                   "Total Suspended Solids (TSS)" = "Total Suspended Solids",         
+                   "Zinc, Total (Recoverable)" = "Zinc, Total"), 
+    selected = "All Pollutants")
+```
+
+
+
+This app displays facilities enrolled under the [Industrial General Permit](https://www.waterboards.ca.gov/water_issues/programs/stormwater/industrial.html) that have had discharges exceeding the permit's numeric action levels (NALs). Facilities that have violated NALs for a pollutant are elevated to "Level 1" and have to develop an Exceedance Response Action Level 1 Report. Facilities that continue to exceed NALs for a pollutant are elevated to "Level 2" and must complete an Exceedance Response Action Level 2 Action Plan.
+
+Data was exported from [SMARTS](https://smarts.waterboards.ca.gov) using the "Current Level 1 and Level 2 Pollutant Search" report on December 4, 2019.
+
+<hr style="border: 1px solid lightblue;" />
+
+```{r}
+ shiny::selectInput("Style", label = h6("Facility Symbol Style"), 
+    choices = list("Markers", "Circles"),
+    selected = "Markers")
+```
+
+Row {.tabset data-height=650}
+-----------------------------------------------------------------------
+
+### Map of Facilities
+    
+```{r}
+selected_data <- sites
+
+mapData <- shiny::reactive({
+  if (as.character(input$Facilities) == "All Active Permitted Facilities") {
+    
+  } else {
+    selected_data <- sites %>%
+      dplyr::filter(!is.na(LevPoll))
+    
+    if (as.character(input$Facilities) == "All Facilities at Level 2 for a Pollutant") {
+      selected_data <- selected_data %>%
+        dplyr::filter(grepl("Level 2", LevPoll))
+    }
+  }
+  
+  if (as.character(input$Pollutant) == "All Pollutants") {
+    
+  } else {
+    selected_data <- selected_data %>%
+      dplyr::filter(grepl(as.character(input$Pollutant), LevPoll))
+  }
+
+  selected_data
+    
+})
+
+# summaryData <- reactive({
+#   mapData() %>%
+#     dplyr::group_by(Primary.SIC.Code) %>%
+#     dplyr::summarize(
+#       count = n())
+# })
+
+graphData <- shiny::reactive({
+  sites %>%
+    dplyr::filter(Pollutant == as.character(input$Pollutant))
+})
+
+levelFilter <- shiny::reactive({
+  input$Level
+})
+
+pollutantFilter <- shiny::reactive({
+  input$Pollutant
+})
+
+leaflet::renderLeaflet({
+  if (nrow(mapData()) == 0) {
+    m <- leaflet() %>%
+      addProviderTiles("Hydda.Full")
+  } else {
+    m <- leaflet() %>%
+      addProviderTiles("Hydda.Full")
+    
+    m <- m %>% addPolygons(data=wma, stroke = TRUE, weight = 0.25, 
+                       smoothFactor = 0.5, fillOpacity = 0.35,
+                       fillColor = ~pal(WATERSHED), 
+                       popup = ~paste("<B>", WATERSHED, "</B>", "<br>"))
+    
+    if (as.character(input$Style) == "Circles"){
+      m <- m %>%
+        addCircleMarkers(data = mapData(), radius = 2, 
+                         color = ~ifelse(is.na(LevPoll), "blue", "red"),
+                 popup = ~paste0('<b>', FACILITY_NAME, '</b></br>',
+                                 'WDID: ', WDID, '</br>',
+                                 FACILITY_ADDRESS, '</br>',
+                                 FACILITY_CITY, ', CA ',
+                                 FACILITY_ZIP, '</br>',
+                                 '<b>Elevated Pollutants</b>:</br>',
+                                 '<i>', LevPoll, '</br></i>'))
+    } else {
+      m <- m %>%
+        addMarkers(data = mapData(), clusterOptions = markerClusterOptions(),
+                 popup = ~paste0('<b>', FACILITY_NAME, '</b></br>',
+                                 'WDID: ', WDID, '</br>',
+                                 FACILITY_ADDRESS, '</br>',
+                                 FACILITY_CITY, ', CA ',
+                                 FACILITY_ZIP, '</br>',
+                                 '<b>Elevated Pollutants</b>:</br>',
+                                 '<i>', LevPoll, '</br></i>'))
+    }
+    
+
+    
+
+  }
+  
+  m %>% setView(-118.2437, 34.0522, zoom = 8)
+  
+})
+```
+
+### Table of Facilities
+
+```{r}
+DT::renderDataTable({
+  DT::datatable(mapData(), 
+                  options = list(pageLength = 10, scrollY = "275px", 
+                                 paging = FALSE, scrollX = "450"),
+                  rownames = FALSE)
+})
+
+```
+
+Row {data-height=350}
+-----------------------------------------------------------------------
+
+### Facility Count
+
+```{r}
+
+renderValueBox({
+  facility_count <- mapData() %>% nrow()
+  valueBox(facility_count, paste0("Number of Facilities - ", input$Facilities, 
+                                  " - ", input$Pollutant), 
+           color = "light-blue")
+})
+```
+
+### Number of Facilities by Standard Industrial Classification (SIC) Code
+
+```{r}
+
+DT::renderDataTable({
+  sic_frequency <- plyr::count(mapData(), 'PRIMARY_SIC')
+  names(sic_frequency) <- c("Primary SIC Code", "Number")
+  
+  DT::datatable(sic_frequency[order(-sic_frequency$Number),], rownames = FALSE, options = list(dom = 't', scrollY = "200px"))
+})
+
+```
+

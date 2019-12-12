@@ -5,15 +5,15 @@
     "dirty" : false,
     "encoding" : "UTF-8",
     "folds" : "",
-    "hash" : "2614336104",
+    "hash" : "2167635981",
     "id" : "85030E0",
-    "lastKnownWriteTime" : 1576178602,
-    "last_content_update" : 1576178602951,
+    "lastKnownWriteTime" : 1576193868,
+    "last_content_update" : 1576193868384,
     "path" : "~/R Projects/data-viewer/viewer.Rmd",
     "project_path" : "viewer.Rmd",
     "properties" : {
-        "cursorPosition" : "89,3",
-        "scrollLine" : "54"
+        "cursorPosition" : "137,0",
+        "scrollLine" : "126"
     },
     "relative_order" : 1,
     "source_on_save" : false,

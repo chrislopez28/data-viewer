@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1576179408497.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "9882317E",
+    "lastKnownWriteTime" : 1575569640,
+    "last_content_update" : 1575569640,
+    "path" : "~/R Projects/industrial-sw-dashboard/igp_viewer.Rmd",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "103,4",
+        "scrollLine" : "88"
+    },
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}
