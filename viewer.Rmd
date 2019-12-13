@@ -60,18 +60,62 @@ fileInput("file2", "Load a Formatted Monitoring Data CSV File",
 
 ```{r}
 
-selectInput(inputId = 'Constituent', label = "Choose Constituent", 
-            choices = NULL)
+### Reference: https://stackoverflow.com/questions/51153184/dynamic-filters-and-reactive-plot-in-shiny
+uiOutput("in1")
 
-selectInput(inputId = 'WeatherCondition', label = "Choose WeatherCondition", 
-            choices = NULL)
+uiOutput("in2")
 
-selectInput(inputId = 'UnitName', label = "Unit Reported", 
-            choices = NULL)
+uiOutput("in3")
 
+uiOutput("in4")
+
+output$in1 <- renderUI({
+  selectInput(inputId = "in_station",
+              label = "StationCode", 
+              choices = as.character(unique(data()$StationCode) %>% sort()),
+              selected = NULL)
+})
+
+datasub <- reactive({
+  data()[data()$StationCode == input$in_station, ]
+})
+
+output$in2 <- renderUI({
+  selectInput(inputId = "in_analyte",
+              label = "AnalyteName",
+              choices = as.character(unique(datasub()$AnalyteName) %>% sort()),
+              selected = NULL)
+})
+
+datasub2 <- reactive({
+  datasub()[datasub()$AnalyteName == input$in_analyte, ]
+})
+
+output$in3 <- renderUI({
+  selectInput(inputId = "in_weather",
+              label = "WeatherCondition",
+              choices = as.character(unique(datasub2()$WeatherCondition) %>% sort()),
+              selected = NULL)
+})
+
+datasub3 <- reactive({
+  datasub2()[datasub2()$WeatherCondition == input$in_weather, ]
+})
+
+output$in4 <- renderUI({
+  selectInput(inputId = "in_units",
+              label = "UnitName",
+              choices = as.character(unique(datasub3()$UnitName) %>% sort()),
+              selected = NULL)
+})
+
+datasub4 <- reactive({
+  datasub3()[datasub3()$UnitName == input$in_units, ]
+})
 
 output$myplot <- shiny::renderPlot({
-  ggplot2::ggplot()
+  ggplot2::ggplot(datasub4(), aes(SampleDate, Result)) + 
+    geom_point()
 })
 
 plotOutput("myplot")
@@ -110,7 +154,7 @@ output$mymap <- leaflet::renderLeaflet({
     leaflet::addProviderTiles("Hydda.Full") %>%
     leaflet::setView(-118.2437, 34.0522, zoom = 9)
   
-  ### Add Watershed Polygons
+  ### Add Watershed Polygons -- Currently Not In Use
   if (add_watersheds) {
     m <- m %>% 
       leaflet::addPolygons(data=watersheds, stroke = TRUE, weight = 0.25, 
@@ -134,58 +178,27 @@ output$mymap <- leaflet::renderLeaflet({
   m
 })
 
+
+
 leafletOutput('mymap')
 
-
-observeEvent(input$mymap_marker_click, {
+click_marker <- observeEvent(input$mymap_marker_click, {
     click <- input$mymap_marker_click
     
-    selected <- data() %>%
+    table_selected <- data() %>%
       dplyr::filter(StationCode == click$id)
-    
-    if (is.null(input$Constituent)) {
-      selected <- selected %>%
-        dplyr::filter(AnalyteName == input$Constituent)
-    }
-    
-    updateSelectInput(session, "Constituent",
-                        choices = unique(selected$AnalyteName) %>% sort(),
-                        selected = NULL)
-    
-    updateSelectInput(session, "WeatherCondition",
-                        choices = unique(selected$WeatherCondition) %>% sort(),
-                        selected = NULL)
-    
-    updateSelectInput(session, "UnitName",
-                    choices = unique(selected$UnitName) %>% sort(),
-                    selected = NULL)
     
     ### Updated Data Table
     output$mytable <- DT::renderDataTable({
       
-      DT::datatable(selected, extensions = 'Scroller', 
+      DT::datatable(table_selected, extensions = 'Scroller', 
                     options = list(pageLength = 10, scrollX = 100, scrollY = 200, scroller = TRUE), rownames = FALSE) %>%
         DT::formatStyle(columns = colnames(.), fontSize = "50%")
     })
     
-    
-    ### Updated Plot
-    output$myplot <- shiny::renderPlot({
-      selected <- selected %>%
-        dplyr::filter(AnalyteName == input$Constituent) %>%
-        dplyr::filter(WeatherCondition == input$WeatherCondition) %>%
-        dplyr::filter(UnitName == input$UnitName)
-      
-      ggplot2::ggplot(selected, aes(SampleDate, Result)) +
-        geom_point()
-    })
+    return(click_marker)
 })
 
-data_for_chart <- reactive({
-
-  return(data()[data()$ids == click_marker(), ])
-
-})
 
 
 ```
