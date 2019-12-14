@@ -36,11 +36,11 @@ options(shiny.maxRequestSize = 30*1024^2)
 Column {.sidebar data-width=425}
 -----------------------------------------------------------------------
 
-### Instructions
+### **Instructions**
 
 Select a station from the map on the left to retrieve monitoring data. You can use the bottom selector to plot particular constituents from that station.
 
-#### Load Files
+#### **Load Files**
 
 ```{r}
 fileInput("file1", "Load a Formatted Stations CSV File",
@@ -56,7 +56,7 @@ fileInput("file2", "Load a Formatted Monitoring Data CSV File",
 ```
 
 
-#### Plot
+#### **Plot**
 
 ```{r}
 
@@ -115,12 +115,20 @@ datasub4 <- reactive({
 
 output$myplot <- shiny::renderPlot({
   ggplot2::ggplot(datasub4(), aes(SampleDate, Result)) + 
-    geom_point()
+    geom_point() +
+    labs(title = paste0("Station: ", input$in_station, " (", input$in_weather, " Weather)"), 
+         subtitle = paste0("AnalyteName: ", input$in_analyte)) +
+    ylab(paste0("Result (", input$in_units, ")")) + 
+    xlab("Sample Date") +
+    theme_light()
 })
 
 plotOutput("myplot")
 
 ```
+
+#### **Statistics**
+To be developed
 
 
 
